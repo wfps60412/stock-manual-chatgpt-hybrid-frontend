@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloud Sync Lab｜Stock Manual ChatGPT Hybrid</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero admin-hero">
+    <h1>Cloud Sync Lab</h1>
+    <p>R18-r5-r2 安全測試頁：此頁只使用現有 8765 Mac Host API，不啟動第二個 server、不覆蓋主 GUI、不直接讀寫 DB。</p>
+    <p><a href="/admin.html">回 Mac Admin</a> ｜ <a href="/">回前台 App</a></p>
+  </header>
+  <main class="container">
+    <section class="card danger-note">
+      <h2>1. 主系統安全狀態</h2>
+      <p class="small">必須先確認 /admin.html、/、/manifest.json、/api/health 均可用。本頁不會修改資料。</p>
+      <div class="row">
+        <button id="btnHealth">檢查主機健康狀態</button>
+        <button id="btnStatic">檢查靜態入口</button>
+      </div>
+      <pre id="healthOut" class="output"></pre>
+    </section>
+    <section class="card">
+      <h2>2. Token 驗證</h2>
+      <p class="small">請輸入目前 Mac Host 終端機顯示的 One-time Sync Code / Token。本頁只呼叫 /api/token/verify。</p>
+      <label>Mac Host URL</label>
+      <input id="hostUrl" placeholder="http://127.0.0.1:8765">
+      <label>One-time Sync Code / Token</label>
+      <input id="syncToken" type="password" placeholder="貼上 token，不要分享給別人">
+      <div class="row">
+        <button id="btnVerifyToken">驗證 Token</button>
+        <button id="btnForgetToken">清除本頁 Token</button>
+      </div>
+      <pre id="tokenOut" class="output"></pre>
+    </section>
+    <section class="card">
+      <h2>3. LAN / iPhone 連線資訊</h2>
+      <p class="small">若 Mac Host 以 LAN sync 模式啟動，請用 Mac 終端機顯示的 LAN URL。不要在公用 Wi‑Fi 使用。</p>
+      <button id="btnLanInfo">產生 LAN 使用提示</button>
+      <pre id="lanOut" class="output"></pre>
+    </section>
+    <section class="card">
+      <h2>4. 驗收標準</h2>
+      <ul class="small">
+        <li>/admin.html 必須 200</li>
+        <li>/ 必須 200</li>
+        <li>/manifest.json 必須 200</li>
+        <li>/api/health 必須 ok:true</li>
+        <li>/api/token/verify 正確 token 必須 200</li>
+      </ul>
+    </section>
+  </main>
+<script src="cloud_sync_lab.js?v=r18r5r2"></script>
+</body>
+</html>
