@@ -3,55 +3,86 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cloud Sync Lab｜Stock Manual ChatGPT Hybrid</title>
+  <title>Cloudflare Sync Bridge｜Stock Manual ChatGPT Hybrid</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="hero admin-hero">
-    <h1>Cloud Sync Lab</h1>
-    <p>R18-r5-r2 安全測試頁：此頁只使用現有 8765 Mac Host API，不啟動第二個 server、不覆蓋主 GUI、不直接讀寫 DB。</p>
+    <h1>Cloudflare Sync Bridge</h1>
+    <p>R18-r6 GUI 驗證頁：使用現有 8765 Mac Host 作為安全代理，連接 Cloudflare Worker / D1。Secret 只送到本機 Mac Host，不寫入 GitHub Pages。</p>
     <p><a href="admin.html">回 Mac Admin</a> ｜ <a href="./">回前台 App</a></p>
   </header>
   <main class="container">
     <section class="card danger-note">
-      <h2>1. 主系統安全狀態</h2>
-      <p class="small">必須先確認 /admin.html、/、/manifest.json、/api/health 均可用。本頁不會修改資料。</p>
-      <div class="row">
-        <button id="btnHealth">檢查主機健康狀態</button>
-        <button id="btnStatic">檢查靜態入口</button>
-      </div>
-      <pre id="healthOut" class="output"></pre>
-    </section>
-    <section class="card">
-      <h2>2. Token 驗證</h2>
-      <p class="small">請輸入目前 Mac Host 終端機顯示的 One-time Sync Code / Token。本頁只呼叫 /api/token/verify。</p>
+      <h2>1. Mac Host / Token</h2>
+      <p class="small">請先確認 Mac Host 正在執行，並輸入本次終端機顯示的 One-time Sync Code / Token。不要把 token 貼給任何人。</p>
       <label>Mac Host URL</label>
       <input id="hostUrl" placeholder="http://127.0.0.1:8765">
       <label>One-time Sync Code / Token</label>
       <input id="syncToken" type="password" placeholder="貼上 token，不要分享給別人">
       <div class="row">
+        <button id="btnMainHealth">檢查主系統</button>
         <button id="btnVerifyToken">驗證 Token</button>
         <button id="btnForgetToken">清除本頁 Token</button>
       </div>
-      <pre id="tokenOut" class="output"></pre>
+      <pre id="mainOut" class="output"></pre>
     </section>
+
     <section class="card">
-      <h2>3. LAN / iPhone 連線資訊</h2>
-      <p class="small">若 Mac Host 以 LAN sync 模式啟動，請用 Mac 終端機顯示的 LAN URL。不要在公用 Wi‑Fi 使用。</p>
-      <button id="btnLanInfo">產生 LAN 使用提示</button>
-      <pre id="lanOut" class="output"></pre>
+      <h2>2. Cloudflare Bridge 設定</h2>
+      <p class="small">這裡只設定本機 Mac Host 的 bridge。測試 secret 可用 Cloudflare D1 裡建立的 test device / host；正式 secret 請另行註冊後再填。</p>
+      <label>Worker URL</label>
+      <input id="workerUrl" placeholder="https://stock-manual-r18-pending-inbox....workers.dev">
+      <label>Device ID</label>
+      <input id="deviceId" placeholder="test-device-r18">
+      <label>Device Secret</label>
+      <input id="deviceSecret" type="password" placeholder="只存本機 data/cloudflare_bridge_config.json">
+      <label>Host ID</label>
+      <input id="hostId" placeholder="test-host-r18">
+      <label>Host Secret</label>
+      <input id="hostSecret" type="password" placeholder="只存本機 data/cloudflare_bridge_config.json">
+      <div class="row">
+        <button id="btnLoadConfig">讀取設定狀態</button>
+        <button id="btnSaveConfig">儲存本機 Bridge 設定</button>
+        <button id="btnWorkerHealth">測 Worker Health</button>
+      </div>
+      <pre id="configOut" class="output"></pre>
     </section>
+
     <section class="card">
-      <h2>4. 驗收標準</h2>
+      <h2>3. GUI E2E 測試</h2>
+      <p class="small">依序執行：送測試 pending 到 Worker/D1 → Host pull/import 到本機 pending_queue → 回 Admin 審核/commit → 同步本機狀態回 Worker。</p>
+      <div class="row">
+        <button id="btnTestSubmit">A. Signed test submit → Worker/D1</button>
+        <button id="btnPullImport">B. Host pull/import → 本機 Pending</button>
+        <button id="btnListLocal">C. 列出本機 Cloud Pending</button>
+      </div>
+      <pre id="e2eOut" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>4. 狀態回寫</h2>
+      <p class="small">在 Admin 頁面對 cloud pending 做 Approve / Commit 後，回到這裡輸入 pending_id，同步本機狀態到 Worker。</p>
+      <label>Pending ID</label>
+      <input id="pendingId" placeholder="例如 gui_test_pending_...">
+      <div class="row">
+        <button id="btnSyncOne">同步該 pending 狀態到 Worker</button>
+        <a class="buttonlink" href="admin.html">前往 Admin 審核</a>
+      </div>
+      <pre id="statusOut" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>5. 驗收標準</h2>
       <ul class="small">
-        <li>/admin.html 必須 200</li>
-        <li>/ 必須 200</li>
-        <li>/manifest.json 必須 200</li>
-        <li>/api/health 必須 ok:true</li>
-        <li>/api/token/verify 正確 token 必須 200</li>
+        <li>/admin.html、/、/manifest.json、/api/health 必須維持 200。</li>
+        <li>Worker health 必須 ok:true。</li>
+        <li>Signed test submit 後，pull/import 應將 TEST 放入本機 Pending Queue。</li>
+        <li>Admin 可看到該 pending，且可 Approve / Commit。</li>
+        <li>狀態回寫 Worker 後，Worker/D1 狀態應與本機一致。</li>
       </ul>
     </section>
   </main>
-<script src="cloud_sync_lab.js?v=r18r5r2"></script>
+<script src="cloud_sync_lab.js?v=r18r6"></script>
 </body>
 </html>
