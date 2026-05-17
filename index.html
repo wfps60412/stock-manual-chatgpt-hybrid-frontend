@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Stock Manual AI">
+  <meta name="theme-color" content="#111827">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <title>台股 ChatGPT 手動分析 Hybrid V0.2-alpha</title>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>台股 ChatGPT 手動分析</h1>
+      <p>V0.2-alpha-r18-r1 · 免 OpenAI API · 保留 r16 GUI · 現價欄位 / 報告同步修正</p>
+    </div>
+    <span id="netBadge" class="badge">未連線 Mac</span>
+  </header>
+
+  <main class="layout">
+    <section class="card warning">
+      <b>重要提醒</b><br>
+      local pending 只存在此裝置，尚未同步並 commit 到 Mac SQLite 前，不是正式保存。投資分析根據手動貼回的 ChatGPT 回答，可能不是即時資料，請自行確認價格、法人、財報與新聞。本工具不是投資建議。
+    </section>
+
+    <section class="card">
+      <h2>1. 新增分析 / 產生 Prompt</h2>
+      <label>股票代號</label>
+      <input id="stockId" placeholder="例如 2330" inputmode="text">
+      <button id="btnGenerate">產生 Prompt</button>
+      <button id="btnCopyOpenChatGPTApp">複製 Prompt 並嘗試開啟 ChatGPT App</button>
+      <button id="btnCopyOpenChatGPTWeb">複製 Prompt 並開啟網頁版</button>
+      <textarea id="promptBox" rows="12" placeholder="產生的 prompt 會在這裡"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>2. 貼回 ChatGPT JSON 回答</h2>
+      <textarea id="responseBox" rows="12" placeholder="貼上 ChatGPT 的 JSON 回答，支援 ```json code fence``` 或前後說明文字"></textarea>
+      <button id="btnPasteResponse">從剪貼簿貼上回答</button>
+      <button id="btnPasteParse">從剪貼簿貼上並解析</button>
+      <button id="btnParseSave">解析、Audit 並自動送出 pending</button>
+      <pre id="parseResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>3. Sync to Mac Host</h2>
+      <label>Mac Host URL</label>
+      <input id="hostUrl" placeholder="http://192.168.x.x:8765">
+      <p class="small">r16：解析通過 audit 後會自動送 pending，不需要獨立送出；用戶端完整報告會依 Mac DB 狀態清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告。</p>
+      <div class="row">
+        <button id="btnHealth">測試 Mac 連線</button>
+        <button id="btnPullStatus">更新同步狀態</button>
+        <button id="btnCleanupLocal">依 Mac DB 清理 Local</button>
+      </div>
+      <pre id="syncResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>4. Local Records / Pending Queue（手機端會依 Mac DB 清理）</h2>
+      <input id="searchBox" placeholder="搜尋股票代號 / 狀態">
+      <button id="btnRefreshLocal">重新整理</button>
+      <div id="localList" class="list"></div>
+    </section>
+
+
+    <section class="card">
+      <h2>5. 用戶端完整報告</h2>
+      <p class="small">此區可閱讀 pending 中報告與 Mac DB 已 commit 的正式報告。清理規則：已 commit 的 local copy 會自動刪除；已 reject、已因 Mac DB retention 過期刪除、或送出超過 5 日仍未 approved 的 local 報告也會自動刪除。</p>
+      <button id="btnLoadClientReports">載入用戶端完整報告</button>
+      <div id="clientReportList" class="list"></div>
+      <pre id="clientReportResult" class="output"></pre>
+    </section>
+    <section class="card admin">
+      <h2>6. Mac Admin / 完整報告 / 更新中心</h2>
+      <p class="small">Mac Admin 需要 token。Approve / Commit、完整正式報告、更新 ZIP 匯入與診斷報告都在管理頁。</p>
+      <p><a class="buttonlink" href="/admin.html">開啟 Mac Admin 管理頁</a></p>
+    </section>
+
+    <section class="card">
+      <h2>7. Local 匯出 / 匯入</h2>
+      <button id="btnExportLocal">匯出本機 IndexedDB JSON</button>
+      <input type="file" id="importFile" accept="application/json">
+      <button id="btnImportLocal">匯入到本機 IndexedDB</button>
+      <pre id="backupResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>8. Diagnostics / Help</h2>
+      <div id="diagBox" class="small"></div>
+      <p class="small">iPhone 加入主畫面：Safari 開啟此頁 → 分享 → 加入主畫面。</p>
+    </section>
+  </main>
+
+<script src="app.js?v=r16"></script>
+</body>
+</html>

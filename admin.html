@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mac Admin｜Stock Manual ChatGPT Hybrid</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero admin-hero">
+    <h1>Mac Admin 管理頁</h1>
+    <p>Pending 審核、Commit、完整報告、更新中心、診斷報告。此頁需要 Mac Host token；輸入一次後 15 分鐘有效，Mac Host 重新啟動後舊 token 會失效。</p>
+    <p><a href="/">回前台 App</a></p>
+  </header>
+  <main class="container">
+    <section class="card danger-note">
+      <h2>1. Token 登入</h2>
+      <p class="small">請輸入 Mac 終端機顯示的 One-time Sync Code / Token。Token 每次啟動不同。輸入並驗證一次後，瀏覽器會保留 15 分鐘；若 Mac Host 重新啟動，token 會改變，驗證失敗時會自動清除。手機送出 pending 不需要 token；Mac 端 Approve / Reject / Commit / 更新 / 診斷才需要 token。</p>
+      <label>Mac Host URL</label>
+      <input id="adminHostUrl" placeholder="http://127.0.0.1:8765">
+      <label>One-time Sync Code / Token</label>
+      <input id="adminToken" type="password" placeholder="貼上 token">
+      <div class="row">
+        <button id="btnAdminHealth">驗證 Token / 測試連線</button>
+        <button id="btnLoadPending">載入 Mac Pending</button>
+      </div>
+      <span id="adminNetBadge" class="badge warn">尚未連線</span>
+      <pre id="adminStatus" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>2. Pending Queue 審核</h2>
+      <p class="small">V0.2-alpha-r16 預設禁止 direct commit；必須先 Approve，再 Commit。pending_submitted 會顯示 Approve / Reject，approved 才會顯示 Commit。</p>
+      <div id="adminList" class="list"></div>
+      <pre id="adminResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>3. 完整報告中心</h2>
+      <p class="small">已 Commit 的正式報告會出現在這裡；local pending 的完整內容可在手機/前台 Local Records 裡展開「完整報告」。</p>
+      <button id="btnLoadReports">載入正式報告</button>
+      <div id="reportList" class="list"></div>
+      <div id="reportResult" class="report-detail output"></div>
+    </section>
+
+    <section class="card">
+      <h2>4. 更新中心</h2>
+      <p class="small">r16 支援完整 GUI 更新與 latest code backup rollback；r11 起支援完整 GUI 更新：匯入 update ZIP → 檢核 VERSION.json → 建立安裝前備份 → 複製新版程式檔並保留 data/diagnostic/updates。安裝完成後需要重新啟動 Mac Host 才會載入新版程式。</p>
+      <button id="btnUpdateInfo">讀取更新中心資訊</button>
+      <label>選擇 update ZIP</label>
+      <input type="file" id="updateZipFile" accept=".zip,application/zip">
+      <div class="row">
+        <button id="btnImportUpdateZip">匯入 update ZIP</button>
+        <button id="btnApplyUpdateZip">建立套用請求</button>
+        <button id="btnDryRunInstallUpdateZip">預檢完整安裝</button>
+        <button id="btnInstallUpdateZip" class="danger">完整安裝更新 ZIP（需重啟）</button>
+        <button id="btnRollbackLatest" class="danger">Rollback 最新 code backup（需重啟）</button>
+      </div>
+      <pre id="updateResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>5. 匯出診斷報告</h2>
+      <p class="small">診斷報告會輸出到 app 根目錄下的 <code>diagnostic/</code> 資料夾，同時產生 JSON 與 MD。</p>
+      <button id="btnDiagnostics">讀取診斷資訊</button>
+      <button id="btnExportDiagnostics">匯出診斷報告</button>
+      <pre id="diagResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>6. 舊版 SQLite 匯入 / 合併</h2>
+      <p class="small">如果新版解壓在新資料夾，上一版已 commit 的報告會留在舊版 data/app.sqlite3。請選擇舊版 app.sqlite3，先 Preview，再 Apply Merge。匯入後仍會套用「同一個股只保留最近 3 份正式報告」。</p>
+      <label>選擇舊版 app.sqlite3</label>
+      <input type="file" id="oldSqliteFile" accept=".sqlite3,.sqlite,.db,application/octet-stream">
+      <div class="row">
+        <button id="btnPreviewOldSqlite">Preview 舊版 SQLite</button>
+        <button id="btnApplyOldSqlite">Apply Merge 舊版 SQLite</button>
+      </div>
+      <pre id="sqliteImportResult" class="output"></pre>
+    </section>
+
+    <section class="card">
+      <h2>7. 備份 / 匯出</h2>
+      <p class="small">Retention：備份與 update artifacts 只保留最近 2 份；診斷報告只保留最近 5 組；同一個股正式報告只保留最近 3 份。</p>
+      <button id="btnSqliteBackup">SQLite Backup</button>
+      <button id="btnJsonExport">JSON Export</button>
+      <pre id="backupResult" class="output"></pre>
+    </section>
+  </main>
+<script src="admin.js?v=r16"></script>
+</body>
+</html>
