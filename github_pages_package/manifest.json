@@ -1,9 +1,0 @@
-{
-  "name": "台股 ChatGPT 手動分析",
-  "short_name": "StockManualAI",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#f3f4f6",
-  "theme_color": "#111827",
-  "icons": []
-}
