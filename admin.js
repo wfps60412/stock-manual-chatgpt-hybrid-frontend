@@ -63,7 +63,7 @@ function recordCard(r){
   const actionHint = status==='pending_submitted' ? '可操作：Approve / Reject；Commit 需先 Approve。' :
     status==='approved' ? '可操作：Commit / Reject。' :
     status==='committed' ? '已正式寫入 SQLite，無可用操作。' :
-    status==='revision_required' ? '需人工確認是否為修正版；本版不自動 commit。' :
+    status==='revision_required' ? '需人工確認：同股同日已有不同內容。可 Approve Revision 後 Commit，或 Reject 保留原資料。' :
     status==='duplicate_blocked' ? '重複 payload，未建立第二筆 pending_queue。' :
     '此狀態無可用操作。';
   const cloudSyncDisplay = (status==='committed' && r.cloud_pending_id)
@@ -85,6 +85,7 @@ function recordCard(r){
   const commit=document.createElement('button'); commit.textContent='Commit（自動回寫 Worker）'; commit.onclick=()=>adminAction('/api/pending/commit',{pending_id:r.pending_id});
   const commitDisabled=document.createElement('button'); commitDisabled.textContent='Commit（需先 Approve）'; commitDisabled.disabled=true; commitDisabled.className='secondary';
   if(status==='pending_submitted'){row.append(approve,reject,commitDisabled)}
+  else if(status==='revision_required'){approve.textContent='Approve Revision'; row.append(approve,reject,commitDisabled)}
   else if(status==='approved'){row.append(commit,reject)}
   else {const span=document.createElement('span'); span.className='small'; span.textContent=actionHint; row.append(span)}
   div.appendChild(row); return div;

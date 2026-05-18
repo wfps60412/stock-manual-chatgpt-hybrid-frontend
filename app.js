@@ -1,4 +1,4 @@
-const APP_VERSION = '0.2.0-alpha-r18-r8-pilot-admin-workflow-prompt-gemini-ux';
+const APP_VERSION = '0.2.0-alpha-r18-r8-r2';
 const DB_NAME = 'stock_manual_chatgpt_hybrid_v0_2';
 const STORE = 'records';
 const SETTINGS = 'settings';
@@ -119,9 +119,11 @@ function schemaExample(stockId){const date=taipeiDate();return `{
   "overall_summary": "整體結論",
   "not_investment_advice": true
 }`}
-function makePrompt(stockId){
-  const model = ($('analysisModel')?.value || 'chatgpt');
-  const modelName = model==='gemini' ? 'Gemini' : model==='manual' ? 'Manual/Other' : 'ChatGPT';
+let currentPromptModel = 'chatgpt';
+function modelNameFromKey(model){return model==='gemini' ? 'Gemini' : model==='manual' ? 'Manual/Other' : 'ChatGPT'}
+function setPromptModel(model){currentPromptModel = model || 'chatgpt';}
+function makePrompt(stockId, model=currentPromptModel){
+  const modelName = modelNameFromKey(model);
   return `請問「${stockId}」（股票代號或標的名稱）目前的技術面、籌碼面、基本面綜合分析，你認為合理的進場價以及獲利了結價格在什麼位置？
 
 請嚴格遵守同一個 JSON schema；無論使用哪一種分析模型，都不得輸出 JSON 以外的文字。analysis_ai 欄位請填入實際使用的模型名稱，例如 ${modelName}。
@@ -232,15 +234,17 @@ function auditAnalysis(obj){
 }
 function canonicalCore(o){const keys=['schema_version','stock_id','stock_name','analysis_date','analysis_ai','current_price_date','current_price','data_freshness','fundamental','technical','chip','entry_price','take_profit_price','risk_notes','overall_summary','not_investment_advice']; const sortObj=v=>{if(Array.isArray(v))return v.map(sortObj); if(v&&typeof v==='object'){return Object.fromEntries(Object.keys(v).sort().map(k=>[k,sortObj(typeof v[k]==='string'?v[k].trim():v[k])]))} return typeof v==='string'?v.trim():v}; return JSON.stringify(sortObj(Object.fromEntries(keys.map(k=>[k,o[k]]))))}
 
-async function generate(){
+async function generate(model=currentPromptModel){
+  setPromptModel(model);
   const stock=sanitizeStock($('stockId').value);
   if(!stock){alert('請輸入股票代號');return}
-  $('promptBox').value=makePrompt(stock);
+  $('promptBox').value=makePrompt(stock, currentPromptModel);
   log('parseResult','Prompt 已產生。請選擇複製 Prompt、開啟 ChatGPT Web 或開啟 Gemini。');
 }
-async function copyPrompt(){
+async function copyPrompt(model=currentPromptModel){
+  setPromptModel(model);
   try{
-    if(!$('promptBox').value.trim()) await generate();
+    await generate(currentPromptModel);
     const r=await writeClipboard($('promptBox').value);
     log('parseResult',{ok:true,message:'Prompt 已複製',method:r.method});
     return true;
@@ -254,12 +258,12 @@ function openUrl(url){
   return !!w;
 }
 async function copyAndOpenChatGPTWeb(){
-  const ok=await copyPrompt();
+  const ok=await copyPrompt('chatgpt');
   const opened=openUrl('https://chatgpt.com/');
   log('parseResult',{ok, opened, message: opened ? 'Prompt 已複製，已開啟 ChatGPT Web。請手動貼上送出；取得回答後複製回本 App。' : 'Prompt 已處理；瀏覽器阻擋自動開啟 ChatGPT Web，請手動開啟 https://chatgpt.com/'});
 }
 async function copyAndOpenGemini(){
-  const ok=await copyPrompt();
+  const ok=await copyPrompt('gemini');
   const opened=openUrl('https://gemini.google.com/');
   log('parseResult',{ok, opened, message: opened ? 'Prompt 已複製，已開啟 Gemini。請手動貼上送出；取得回答後複製回本 App。' : 'Prompt 已處理；瀏覽器阻擋自動開啟 Gemini，請手動開啟 https://gemini.google.com/'});
 }
@@ -653,7 +657,7 @@ async function boot(){await openDB(); const device=await ensureDeviceId(); $('ho
 Device ID: ${device}
 IndexedDB: ${DB_NAME}
 analysis_date 採 Asia/Taipei YYYY-MM-DD。
-r16：解析通過 audit 後自動送 pending；用戶端完整報告會先依 Mac DB 清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告；用戶端超前於 DB 的內容只會是 pending 中報告。`; $('btnGenerate').onclick=generate; if($('analysisModel')) $('analysisModel').onchange=async()=>{if($('promptBox').value.trim()) await generate();}; if($('btnCopyPrompt')) $('btnCopyPrompt').onclick=copyPrompt; $('btnCopyOpenChatGPTWeb').onclick=copyAndOpenChatGPTWeb; if($('btnCopyOpenGemini')) $('btnCopyOpenGemini').onclick=copyAndOpenGemini; $('btnPasteParse').onclick=pasteAndParse; $('btnParseSave').onclick=parseSave; $('btnHealth').onclick=health; $('btnPullStatus').onclick=async()=>{await pullStatusAndCleanup(); await loadClientReports(false);}; $('btnCleanupLocal').onclick=async()=>{await cleanupLocalAgainstMacDB(false); await loadClientReports(false);}; if($('btnCloudSave')) $('btnCloudSave').onclick=cloudSaveSettings; if($('btnCloudClear')) $('btnCloudClear').onclick=cloudClearSettings; if($('btnCloudWorkerHealth')) $('btnCloudWorkerHealth').onclick=cloudWorkerHealth; if($('btnCloudSubmitAll')) $('btnCloudSubmitAll').onclick=cloudSubmitAll; loadCloudCfgToInputs(); updateCloudConfigStatus(); $('btnRefreshLocal').onclick=async()=>{await renderLocal(); await loadClientReports(false);}; if($('btnLoadClientReports')) $('btnLoadClientReports').onclick=()=>loadClientReports(true); $('searchBox').oninput=renderLocal; $('btnExportLocal').onclick=exportLocal; $('btnImportLocal').onclick=importLocal; setupCollapsibles(); renderLocal(); loadClientReports(false)}
+r16：解析通過 audit 後自動送 pending；用戶端完整報告會先依 Mac DB 清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告；用戶端超前於 DB 的內容只會是 pending 中報告。`; $('btnGenerate').onclick=()=>generate('chatgpt'); if($('btnCopyPrompt')) $('btnCopyPrompt').onclick=()=>copyPrompt('chatgpt'); $('btnCopyOpenChatGPTWeb').onclick=copyAndOpenChatGPTWeb; if($('btnCopyOpenGemini')) $('btnCopyOpenGemini').onclick=copyAndOpenGemini; $('btnPasteParse').onclick=pasteAndParse; $('btnParseSave').onclick=parseSave; $('btnHealth').onclick=health; $('btnPullStatus').onclick=async()=>{await pullStatusAndCleanup(); await loadClientReports(false);}; $('btnCleanupLocal').onclick=async()=>{await cleanupLocalAgainstMacDB(false); await loadClientReports(false);}; if($('btnCloudSave')) $('btnCloudSave').onclick=cloudSaveSettings; if($('btnCloudClear')) $('btnCloudClear').onclick=cloudClearSettings; if($('btnCloudWorkerHealth')) $('btnCloudWorkerHealth').onclick=cloudWorkerHealth; if($('btnCloudSubmitAll')) $('btnCloudSubmitAll').onclick=cloudSubmitAll; loadCloudCfgToInputs(); updateCloudConfigStatus(); $('btnRefreshLocal').onclick=async()=>{await renderLocal(); await loadClientReports(false);}; if($('btnLoadClientReports')) $('btnLoadClientReports').onclick=()=>loadClientReports(true); $('searchBox').oninput=renderLocal; $('btnExportLocal').onclick=exportLocal; $('btnImportLocal').onclick=importLocal; setupCollapsibles(); renderLocal(); loadClientReports(false)}
 boot().catch(e=>alert(e.message));
 
-// r18-r8 marker: pilot_admin_workflow_prompt_gemini_ux
+// r18-r8-r2 marker: revision_queue_auto_model_selection_hotfix
