@@ -14,7 +14,7 @@
   <header class="topbar">
     <div>
       <h1>台股 ChatGPT 手動分析</h1>
-      <p>V0.2-alpha-r18-r1 · 免 OpenAI API · 保留 r16 GUI · 現價欄位 / 報告同步修正</p>
+      <p>V0.2-alpha-r18-r7 · GitHub Pages → Cloudflare Direct Submit Pilot · 保留 r16 GUI</p>
     </div>
     <span id="netBadge" class="badge">未連線 Mac</span>
   </header>
@@ -57,6 +57,25 @@
       <pre id="syncResult" class="output"></pre>
     </section>
 
+
+
+    <section class="card warning">
+      <h2>3B. GitHub → Cloudflare Direct Sync（Pilot）</h2>
+      <p class="small">小規模測試用：iPhone/GitHub Pages 可直接用 HTTPS 送出 signed pending 到 Cloudflare Worker / D1，不需要同 Wi-Fi 連 Mac。Device Secret 只存在此瀏覽器 localStorage，不會寫入 GitHub Pages。Mac 端仍負責 pull/import、Admin Approve/Commit、狀態回寫。</p>
+      <label>Worker URL</label>
+      <input id="cloudWorkerUrl" placeholder="https://stock-manual-r18-pending-inbox....workers.dev">
+      <label>Device ID</label>
+      <input id="cloudDeviceId" placeholder="pilot-device-001">
+      <label>Device Secret</label>
+      <input id="cloudDeviceSecret" type="password" placeholder="只存在此裝置 localStorage，不要分享">
+      <div class="row">
+        <button id="btnCloudSave">儲存 Cloudflare Direct 設定</button>
+        <button id="btnCloudWorkerHealth">測 Worker Health</button>
+        <button id="btnCloudSubmitAll">送出 pending_local / sync_error 到 Cloudflare</button>
+      </div>
+      <pre id="cloudSyncResult" class="output"></pre>
+    </section>
+
     <section class="card">
       <h2>4. Local Records / Pending Queue（手機端會依 Mac DB 清理）</h2>
       <input id="searchBox" placeholder="搜尋股票代號 / 狀態">
@@ -93,6 +112,6 @@
     </section>
   </main>
 
-<script src="app.js?v=r16"></script>
+<script src="app.js?v=r18r7"></script>
 </body>
 </html>

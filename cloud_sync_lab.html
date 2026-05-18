@@ -9,7 +9,7 @@
 <body>
   <header class="hero admin-hero">
     <h1>Cloudflare Sync Bridge</h1>
-    <p>R18-r6 GUI 驗證頁：使用現有 8765 Mac Host 作為安全代理，連接 Cloudflare Worker / D1。Secret 只送到本機 Mac Host，不寫入 GitHub Pages。</p>
+    <p>R18-r7 Pilot：GitHub Pages 前台可直接 signed submit 到 Cloudflare Worker / D1；Mac Host 仍負責 pull/import、Admin approve/commit、status sync。Secret 只存在使用者裝置或本機 Mac，不寫入 GitHub Pages。</p>
     <p><a href="admin.html">回 Mac Admin</a> ｜ <a href="./">回前台 App</a></p>
   </header>
   <main class="container">
@@ -83,6 +83,6 @@
       </ul>
     </section>
   </main>
-<script src="cloud_sync_lab.js?v=r18r6"></script>
+<script src="cloud_sync_lab.js?v=r18r7"></script>
 </body>
 </html>

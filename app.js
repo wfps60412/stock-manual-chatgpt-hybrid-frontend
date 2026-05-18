@@ -1,4 +1,4 @@
-const APP_VERSION = '0.2.0-alpha-r18-r3-json-repair-token-expiry';
+const APP_VERSION = '0.2.0-alpha-r18-r7-pilot-github-cloudflare-direct-submit';
 const DB_NAME = 'stock_manual_chatgpt_hybrid_v0_2';
 const STORE = 'records';
 const SETTINGS = 'settings';
@@ -346,6 +346,133 @@ async function submitAll(){try{
   log('syncResult',{ok:true,submitted,blocked,total:out.length,results:out,next:'若 submitted > 0，Mac Admin 應可載入 pending 並顯示 Approve / Reject。'});
   await renderLocal();
 }catch(e){log('syncResult',{ok:false,error:e.message})}}
+
+
+// R18-r7: GitHub Pages -> Cloudflare direct signed submit for pilot devices.
+function getCloudCfg(){
+  return {
+    worker_url:(localStorage.getItem('cloudDirectWorkerUrl')||'https://stock-manual-r18-pending-inbox.stock-manual-r18-pending-inbox.workers.dev').replace(/\/+$/,''),
+    device_id:localStorage.getItem('cloudDirectDeviceId')||'',
+    device_secret:localStorage.getItem('cloudDirectDeviceSecret')||''
+  };
+}
+function setCloudCfg(cfg){
+  localStorage.setItem('cloudDirectWorkerUrl',(cfg.worker_url||'').replace(/\/+$/,''));
+  localStorage.setItem('cloudDirectDeviceId',cfg.device_id||'');
+  if(cfg.device_secret) localStorage.setItem('cloudDirectDeviceSecret',cfg.device_secret);
+}
+function cloudCfgFromInputs(){
+  return {
+    worker_url:($('cloudWorkerUrl')?.value||'').trim().replace(/\/+$/,''),
+    device_id:($('cloudDeviceId')?.value||'').trim(),
+    device_secret:($('cloudDeviceSecret')?.value||'').trim()
+  };
+}
+function loadCloudCfgToInputs(){
+  const c=getCloudCfg();
+  if($('cloudWorkerUrl')) $('cloudWorkerUrl').value=c.worker_url;
+  if($('cloudDeviceId')) $('cloudDeviceId').value=c.device_id;
+  if($('cloudDeviceSecret') && c.device_secret) $('cloudDeviceSecret').value=c.device_secret;
+}
+async function strictSha256Hex(text){
+  const c=window.crypto||window.msCrypto;
+  if(!c||!c.subtle) throw new Error('此瀏覽器不支援 WebCrypto，無法產生 Cloudflare HMAC 簽章。請用 HTTPS GitHub Pages 或新版 Safari/Chrome。');
+  const buf=await c.subtle.digest('SHA-256',new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function hmacSha256Hex(secret,msg){
+  const c=window.crypto||window.msCrypto;
+  if(!c||!c.subtle) throw new Error('此瀏覽器不支援 WebCrypto HMAC。');
+  const key=await c.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const sig=await c.subtle.sign('HMAC',key,new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function cloudNonce(){return 'cf_'+Date.now()+'_'+Math.random().toString(16).slice(2)}
+function redactCloudResult(x){
+  const copy=JSON.parse(JSON.stringify(x));
+  if(copy.device_secret) copy.device_secret='[REDACTED]';
+  if(copy.headers?.['X-Signature']) copy.headers['X-Signature']='[REDACTED]';
+  return copy;
+}
+async function cloudSignedFetch(path,method,bodyObj,cfg){
+  const bodyText = bodyObj===null ? '' : JSON.stringify(bodyObj);
+  const ts = new Date().toISOString().replace(/\.\d{3}Z$/,'Z');
+  const nonce = cloudNonce();
+  const bodyHash = await strictSha256Hex(bodyText);
+  const canonical = `${method}\n${path}\n${ts}\n${nonce}\n${bodyHash}`;
+  const sig = await hmacSha256Hex(cfg.device_secret, canonical);
+  const res = await fetch(cfg.worker_url+path, {
+    method,
+    cache:'no-store',
+    headers:{'Content-Type':'application/json','X-Device-Id':cfg.device_id,'X-Timestamp':ts,'X-Nonce':nonce,'X-Signature':sig},
+    body: bodyObj===null ? undefined : bodyText
+  });
+  const text = await res.text();
+  let data; try{data=JSON.parse(text)}catch{data={raw:text.slice(0,500)}}
+  return {ok:res.ok,status:res.status,data};
+}
+async function cloudWorkerHealth(){
+  try{
+    const cfg=cloudCfgFromInputs(); if(!cfg.worker_url) throw new Error('請輸入 Worker URL'); setCloudCfg(cfg);
+    const res=await fetch(cfg.worker_url+'/api/health',{cache:'no-store'});
+    const text=await res.text(); let data; try{data=JSON.parse(text)}catch{data=text.slice(0,500)}
+    log('cloudSyncResult',{ok:res.ok,status:res.status,data});
+  }catch(e){log('cloudSyncResult',{ok:false,error:e.message})}
+}
+function cloudPayloadFromRecord(r,cfg){
+  return {
+    pending_id:r.pending_id,
+    device_id:cfg.device_id,
+    created_at:r.created_at||nowIso(),
+    parsed_json:r.parsed_json,
+    raw_response_text:r.raw_response_text||'',
+    prompt_text:r.prompt_text||'',
+    app_version:APP_VERSION,
+    client_version:'github-pages-r18-r7-pilot',
+    source_mode:'github_pages_cloudflare_direct'
+  };
+}
+async function cloudSubmitRecord(r){
+  const cfg=cloudCfgFromInputs();
+  if(!cfg.worker_url||!cfg.device_id||!cfg.device_secret) throw new Error('請先輸入 Worker URL / Device ID / Device Secret');
+  setCloudCfg(cfg);
+  validateAnalysis(r.parsed_json||{});
+  const payload=cloudPayloadFromRecord(r,cfg);
+  const resp=await cloudSignedFetch('/api/pending/submit','POST',payload,cfg);
+  if(resp.ok && resp.data?.ok){
+    r.status = resp.data.duplicate ? 'cloud_duplicate' : 'cloud_submitted';
+    r.cloud_worker_url = cfg.worker_url;
+    r.cloud_device_id = cfg.device_id;
+    r.cloud_pending_id = resp.data.cloud_pending_id || r.cloud_pending_id;
+    r.cloud_status = resp.data.status || r.cloud_status || 'cloud_received';
+    r.cloud_payload_hash = resp.data.payload_hash || r.cloud_payload_hash;
+    r.cloud_submitted_at = nowIso();
+    r.server_response = {ok:true, cloudflare:resp.data};
+  }else{
+    r.status='cloud_submit_failed';
+    r.server_response={ok:false, stage:'cloud_direct_submit', status:resp.status, response:resp.data};
+  }
+  r.updated_at=nowIso(); await putRecord(r);
+  return {pending_id:r.pending_id,stock_id:r.stock_id,status:r.status,cloud_pending_id:r.cloud_pending_id,response:resp.data};
+}
+async function cloudSubmitAll(){
+  try{
+    const all=await getAllRecords();
+    const pending=all.filter(r=>['pending_local','sync_error','cloud_submit_failed'].includes(r.status));
+    if(!pending.length){log('cloudSyncResult',{ok:true,submitted:0,message:'沒有 pending_local / sync_error / cloud_submit_failed 可送到 Cloudflare'});return;}
+    const out=[];
+    for(const r of pending){try{out.push(await cloudSubmitRecord(r));}catch(e){r.status='cloud_submit_failed';r.server_response={ok:false,error:e.message,stage:'cloud_direct_submit'};r.updated_at=nowIso();await putRecord(r);out.push({pending_id:r.pending_id,stock_id:r.stock_id,status:r.status,error:e.message});}}
+    log('cloudSyncResult',{ok:true,total:out.length,cloud_submitted:out.filter(x=>x.status==='cloud_submitted'||x.status==='cloud_duplicate').length,failed:out.filter(x=>x.status==='cloud_submit_failed').length,results:out,next:'請回 Mac Host Cloud Sync Lab 執行 Host pull/import，然後到 Admin 載入 Mac Pending。'});
+    await renderLocal();
+  }catch(e){log('cloudSyncResult',{ok:false,error:e.message})}
+}
+async function cloudSaveSettings(){
+  const cfg=cloudCfgFromInputs();
+  if(!cfg.worker_url||!cfg.device_id) {log('cloudSyncResult',{ok:false,error:'請至少輸入 Worker URL 與 Device ID'}); return;}
+  setCloudCfg(cfg);
+  log('cloudSyncResult',{ok:true,message:'已儲存於此瀏覽器 localStorage。Device Secret 不會上傳 GitHub；請勿共用此裝置。',worker_url:cfg.worker_url,device_id:cfg.device_id,device_secret:cfg.device_secret?'[REDACTED]':'[EMPTY]'});
+}
+
 async function pullStatus(){try{
   const device=await ensureDeviceId();
   const resp=await api('/api/sync/status?device_id='+encodeURIComponent(device));
@@ -454,6 +581,10 @@ async function renderLocal(){
       const box=document.createElement('div'); box.className='embedded-report'; box.innerHTML=readableReportHtml(r,{status:r.status}); div.appendChild(box); box.scrollIntoView({behavior:'smooth',block:'nearest'});
     };
     row.appendChild(show);
+    if(['pending_local','sync_error','cloud_submit_failed'].includes(r.status)){
+      const cloud=document.createElement('button'); cloud.textContent='送到 Cloudflare'; cloud.onclick=async()=>{try{const out=await cloudSubmitRecord(r); log('cloudSyncResult',{ok:true,submitted:1,results:[out]}); await renderLocal();}catch(e){log('cloudSyncResult',{ok:false,error:e.message})}};
+      row.appendChild(cloud);
+    }
     const del=document.createElement('button'); del.className='danger'; del.textContent='刪除 local record'; del.onclick=async()=>{if(confirm('只刪除此裝置本機資料，已送到 Mac 的資料不會刪除。確定？')){await delRecord(r.local_id); setupCollapsibles(); renderLocal(); loadClientReports(false)}};
     row.appendChild(del);
     if(r.server_response){const details=document.createElement('details'); details.innerHTML=`<summary>上次自動送出結果</summary><pre>${JSON.stringify(r.server_response,null,2)}</pre>`; div.appendChild(details);}
@@ -505,7 +636,7 @@ async function boot(){await openDB(); const device=await ensureDeviceId(); $('ho
 Device ID: ${device}
 IndexedDB: ${DB_NAME}
 analysis_date 採 Asia/Taipei YYYY-MM-DD。
-r16：解析通過 audit 後自動送 pending；用戶端完整報告會先依 Mac DB 清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告；用戶端超前於 DB 的內容只會是 pending 中報告。`; $('btnGenerate').onclick=generate; $('btnCopyOpenChatGPTApp').onclick=copyAndOpenChatGPTApp; $('btnCopyOpenChatGPTWeb').onclick=copyAndOpenChatGPTWeb; $('btnPasteResponse').onclick=pasteClipboardToResponse; $('btnPasteParse').onclick=pasteAndParse; $('btnParseSave').onclick=parseSave; $('btnHealth').onclick=health; $('btnPullStatus').onclick=async()=>{await pullStatusAndCleanup(); await loadClientReports(false);}; $('btnCleanupLocal').onclick=async()=>{await cleanupLocalAgainstMacDB(false); await loadClientReports(false);}; $('btnRefreshLocal').onclick=async()=>{await renderLocal(); await loadClientReports(false);}; if($('btnLoadClientReports')) $('btnLoadClientReports').onclick=()=>loadClientReports(true); $('searchBox').oninput=renderLocal; $('btnExportLocal').onclick=exportLocal; $('btnImportLocal').onclick=importLocal; setupCollapsibles(); renderLocal(); loadClientReports(false)}
+r16：解析通過 audit 後自動送 pending；用戶端完整報告會先依 Mac DB 清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告；用戶端超前於 DB 的內容只會是 pending 中報告。`; $('btnGenerate').onclick=generate; $('btnCopyOpenChatGPTApp').onclick=copyAndOpenChatGPTApp; $('btnCopyOpenChatGPTWeb').onclick=copyAndOpenChatGPTWeb; $('btnPasteResponse').onclick=pasteClipboardToResponse; $('btnPasteParse').onclick=pasteAndParse; $('btnParseSave').onclick=parseSave; $('btnHealth').onclick=health; $('btnPullStatus').onclick=async()=>{await pullStatusAndCleanup(); await loadClientReports(false);}; $('btnCleanupLocal').onclick=async()=>{await cleanupLocalAgainstMacDB(false); await loadClientReports(false);}; if($('btnCloudSave')) $('btnCloudSave').onclick=cloudSaveSettings; if($('btnCloudWorkerHealth')) $('btnCloudWorkerHealth').onclick=cloudWorkerHealth; if($('btnCloudSubmitAll')) $('btnCloudSubmitAll').onclick=cloudSubmitAll; loadCloudCfgToInputs(); $('btnRefreshLocal').onclick=async()=>{await renderLocal(); await loadClientReports(false);}; if($('btnLoadClientReports')) $('btnLoadClientReports').onclick=()=>loadClientReports(true); $('searchBox').oninput=renderLocal; $('btnExportLocal').onclick=exportLocal; $('btnImportLocal').onclick=importLocal; setupCollapsibles(); renderLocal(); loadClientReports(false)}
 boot().catch(e=>alert(e.message));
 
-// r18-r3 marker: json_repair_note
+// r18-r7 marker: github_cloudflare_direct_submit
