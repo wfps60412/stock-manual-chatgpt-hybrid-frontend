@@ -66,13 +66,17 @@ function recordCard(r){
     status==='revision_required' ? '需人工確認是否為修正版；本版不自動 commit。' :
     status==='duplicate_blocked' ? '重複 payload，未建立第二筆 pending_queue。' :
     '此狀態無可用操作。';
+  const cloudSyncDisplay = (status==='committed' && r.cloud_pending_id)
+    ? (r.cloud_sync_status || r.cloud_status || '已同步 committed')
+    : (r.cloud_sync_status || r.cloud_status || '未同步/待確認');
+  const cloudSyncAt = r.last_cloud_sync_at || (status==='committed' && r.cloud_pending_id ? (r.committed_at || r.updated_at || '') : '');
   div.innerHTML=`<b>${r.stock_id}</b> ${parsed.stock_name||''}｜${r.analysis_date||''}<br>
     狀態：<span class="badge status-badge">${status}</span><br>
     現價資訊：${esc(parsed.current_price_date ?? r.current_price_date ?? '資料不足')}｜${esc(parsed.current_price ?? r.current_price ?? '資料不足')}<br>
     操作資訊：<b>${actionHint}</b><br>
     Pending ID：<code>${r.pending_id}</code><br>
     來源：${esc(r.source_mode||'local')}｜Cloud Pending ID：<code>${esc(r.cloud_pending_id||'')}</code><br>
-    Cloud Sync：${esc(r.cloud_sync_status||r.cloud_status||'未同步/待確認')}｜最後同步：${esc(r.last_cloud_sync_at||'')}<br>
+    Cloud Sync：${esc(cloudSyncDisplay)}｜最後同步：${esc(cloudSyncAt)}<br>
     Hash：<code>${String(r.payload_hash||'').slice(0,16)}...</code><br>
     <details><summary>完整 pending JSON</summary><pre>${JSON.stringify(parsed,null,2)}</pre></details>`;
   const row=document.createElement('div'); row.className='row';

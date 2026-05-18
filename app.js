@@ -94,7 +94,7 @@ function schemaExample(stockId){const date=taipeiDate();return `{
   "stock_id": "${stockId}",
   "stock_name": "股票名稱",
   "analysis_date": "${date}",
-  "analysis_ai": "ChatGPT",
+  "analysis_ai": "分析模型名稱，例如 ChatGPT / Gemini / Manual",
   "current_price_date": "YYYY-MM-DD 或 null",
   "current_price": null,
   "data_freshness": {
@@ -121,10 +121,10 @@ function schemaExample(stockId){const date=taipeiDate();return `{
 }`}
 function makePrompt(stockId){
   const model = ($('analysisModel')?.value || 'chatgpt');
-  const modelNote = model==='gemini' ? '你現在是使用 Gemini；仍請嚴格遵守同一個 JSON schema。' : model==='manual' ? '你現在是使用其他模型或人工分析；仍請嚴格遵守同一個 JSON schema。' : '你現在是使用 ChatGPT；請嚴格遵守同一個 JSON schema。';
+  const modelName = model==='gemini' ? 'Gemini' : model==='manual' ? 'Manual/Other' : 'ChatGPT';
   return `請問「${stockId}」（股票代號或標的名稱）目前的技術面、籌碼面、基本面綜合分析，你認為合理的進場價以及獲利了結價格在什麼位置？
 
-${modelNote}
+請嚴格遵守同一個 JSON schema；無論使用哪一種分析模型，都不得輸出 JSON 以外的文字。analysis_ai 欄位請填入實際使用的模型名稱，例如 ${modelName}。
 
 請採「謹慎、風險優先、保守假設」的投資分析方式。若技術面、籌碼面、基本面訊號分歧，應優先給出觀望、等待確認、分批或降低部位的結論，不得過度樂觀。若資料不足，不得給明確買進建議。
 
