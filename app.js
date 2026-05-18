@@ -1,4 +1,4 @@
-const APP_VERSION = '0.2.0-alpha-r18-r7-pilot-github-cloudflare-direct-submit';
+const APP_VERSION = '0.2.0-alpha-r18-r8-pilot-admin-workflow-prompt-gemini-ux';
 const DB_NAME = 'stock_manual_chatgpt_hybrid_v0_2';
 const STORE = 'records';
 const SETTINGS = 'settings';
@@ -119,16 +119,31 @@ function schemaExample(stockId){const date=taipeiDate();return `{
   "overall_summary": "整體結論",
   "not_investment_advice": true
 }`}
-function makePrompt(stockId){return `請問「${stockId}」（股票代號或標的名稱）目前的技術面、籌碼面、基本面綜合分析，你認為合理的進場價以及獲利了結價格在什麼位置？
+function makePrompt(stockId){
+  const model = ($('analysisModel')?.value || 'chatgpt');
+  const modelNote = model==='gemini' ? '你現在是使用 Gemini；仍請嚴格遵守同一個 JSON schema。' : model==='manual' ? '你現在是使用其他模型或人工分析；仍請嚴格遵守同一個 JSON schema。' : '你現在是使用 ChatGPT；請嚴格遵守同一個 JSON schema。';
+  return `請問「${stockId}」（股票代號或標的名稱）目前的技術面、籌碼面、基本面綜合分析，你認為合理的進場價以及獲利了結價格在什麼位置？
+
+${modelNote}
+
+請採「謹慎、風險優先、保守假設」的投資分析方式。若技術面、籌碼面、基本面訊號分歧，應優先給出觀望、等待確認、分批或降低部位的結論，不得過度樂觀。若資料不足，不得給明確買進建議。
+
+價格資料規則：
+1. 請查詢最新可得「正式收盤價」，不是盤中價、估算價或未標日期價格。
+2. 上市股票與 ETF 優先使用臺灣證券交易所 TWSE 官方資料，例如 TWSE 個股日成交資訊、個股日收盤價及月平均價、TWSE OpenAPI。
+3. 上櫃股票優先使用證券櫃檯買賣中心 TPEx 官方資料，例如 TPEx 個股日成交資訊、每日收盤行情。
+4. 公開資訊觀測站、公司公告、財報、券商或金融資訊網站只能作輔助；若官方收盤價無法確認，current_price 與 current_price_date 必須填 null，並在 data_freshness.source_note 說明「無法確認最新官方收盤價」。
+5. 不得自行推估、不得混用除權息前後未說明價格、不得使用沒有日期的價格。
 
 請只輸出一個有效 JSON 物件，不要使用 Markdown code fence，不要加入任何 JSON 以外的自然語言、說明、前言或結語。
 請務必依照以下 JSON 格式回答，不要省略欄位。若資料不足，請填 null 或「資料不足」，不要自行編造。
-請明確說明資料可能不是即時資料，並標示你能判斷的資料日期或資料新鮮度。
-評分需為 1.0 到 10.0 的數字。價格欄位 price_low / price_high 請填數字或 null。
-重要：完整報告必須包含製作報告時最新現價日期 current_price_date 與最新現價 current_price；若無法取得，兩欄請填 null，並在 data_freshness.source_note 說明。
+請明確標示資料日期與資料新鮮度。
+評分需為 1.0 到 10.0 的數字；價格欄位 price_low / price_high 請填數字或 null。
+所有結論必須視為非投資建議，not_investment_advice 必須為 true。
 
 JSON 格式如下：
-${schemaExample(stockId)}`}
+${schemaExample(stockId)}`
+}
 
 function balanceJsonBraces(s){
   let stack=[], inStr=false, esc=false;
@@ -221,7 +236,7 @@ async function generate(){
   const stock=sanitizeStock($('stockId').value);
   if(!stock){alert('請輸入股票代號');return}
   $('promptBox').value=makePrompt(stock);
-  log('parseResult','Prompt 已產生。請按「複製 Prompt 並嘗試開啟 ChatGPT App」或「複製 Prompt 並開啟網頁版」。');
+  log('parseResult','Prompt 已產生。請選擇複製 Prompt、開啟 ChatGPT Web 或開啟 Gemini。');
 }
 async function copyPrompt(){
   try{
@@ -238,27 +253,15 @@ function openUrl(url){
   const w=window.open(url,'_blank','noopener');
   return !!w;
 }
-async function copyAndOpenChatGPTApp(){
-  const ok=await copyPrompt();
-  // iOS normally routes universal links to the installed ChatGPT app when the system association is enabled.
-  // If it stays in Safari, use the web fallback button. Prompt is already copied either way.
-  const opened=openUrl('https://chatgpt.com/');
-  log('parseResult',{ok, opened, message: opened ? 'Prompt 已複製，已嘗試開啟 ChatGPT App/Universal Link。若仍在 Safari，請手動貼上送出；取得回答後複製回本 App。' : 'Prompt 已處理；瀏覽器阻擋開啟 ChatGPT，請手動開啟 ChatGPT App 或網頁。'});
-}
 async function copyAndOpenChatGPTWeb(){
   const ok=await copyPrompt();
   const opened=openUrl('https://chatgpt.com/');
-  log('parseResult',{ok, opened, message: opened ? 'Prompt 已複製，已開啟 ChatGPT 網頁版。請手動貼上送出；取得回答後複製回本 App。' : 'Prompt 已處理；瀏覽器阻擋自動開啟網頁版，請手動開啟 https://chatgpt.com/'});
+  log('parseResult',{ok, opened, message: opened ? 'Prompt 已複製，已開啟 ChatGPT Web。請手動貼上送出；取得回答後複製回本 App。' : 'Prompt 已處理；瀏覽器阻擋自動開啟 ChatGPT Web，請手動開啟 https://chatgpt.com/'});
 }
-async function pasteClipboardToResponse(){
-  try{
-    const txt=await readClipboardText();
-    $('responseBox').value=txt;
-    log('parseResult',{ok:true,message:'已從剪貼簿讀取回答，請按「解析並存為 local pending」'});
-  }catch(e){
-    focusResponseBox();
-    log('parseResult',{ok:false,error:e.message, manual_fallback:'已聚焦回答框。請長按回答框貼上，再按「解析並存為 local pending」。'});
-  }
+async function copyAndOpenGemini(){
+  const ok=await copyPrompt();
+  const opened=openUrl('https://gemini.google.com/');
+  log('parseResult',{ok, opened, message: opened ? 'Prompt 已複製，已開啟 Gemini。請手動貼上送出；取得回答後複製回本 App。' : 'Prompt 已處理；瀏覽器阻擋自動開啟 Gemini，請手動開啟 https://gemini.google.com/'});
 }
 async function pasteAndParse(){
   try{
@@ -374,6 +377,19 @@ function loadCloudCfgToInputs(){
   if($('cloudDeviceId')) $('cloudDeviceId').value=c.device_id;
   if($('cloudDeviceSecret') && c.device_secret) $('cloudDeviceSecret').value=c.device_secret;
 }
+function updateCloudConfigStatus(){
+  if(!$('cloudConfigStatus')) return;
+  const c=getCloudCfg();
+  $('cloudConfigStatus').textContent = c.worker_url && c.device_id ? `Cloudflare Direct Sync：已設定｜Device ID：${c.device_id}｜Device Secret：${c.device_secret?'已儲存於此裝置':'未儲存'}` : 'Cloudflare Direct Sync：未設定';
+}
+async function cloudClearSettings(){
+  localStorage.removeItem('cloudDirectWorkerUrl');
+  localStorage.removeItem('cloudDirectDeviceId');
+  localStorage.removeItem('cloudDirectDeviceSecret');
+  loadCloudCfgToInputs();
+  updateCloudConfigStatus();
+  log('cloudSyncResult',{ok:true,message:'已清除本裝置 Cloudflare Direct 設定'});
+}
 async function strictSha256Hex(text){
   const c=window.crypto||window.msCrypto;
   if(!c||!c.subtle) throw new Error('此瀏覽器不支援 WebCrypto，無法產生 Cloudflare HMAC 簽章。請用 HTTPS GitHub Pages 或新版 Safari/Chrome。');
@@ -462,7 +478,7 @@ async function cloudSubmitAll(){
     if(!pending.length){log('cloudSyncResult',{ok:true,submitted:0,message:'沒有 pending_local / sync_error / cloud_submit_failed 可送到 Cloudflare'});return;}
     const out=[];
     for(const r of pending){try{out.push(await cloudSubmitRecord(r));}catch(e){r.status='cloud_submit_failed';r.server_response={ok:false,error:e.message,stage:'cloud_direct_submit'};r.updated_at=nowIso();await putRecord(r);out.push({pending_id:r.pending_id,stock_id:r.stock_id,status:r.status,error:e.message});}}
-    log('cloudSyncResult',{ok:true,total:out.length,cloud_submitted:out.filter(x=>x.status==='cloud_submitted'||x.status==='cloud_duplicate').length,failed:out.filter(x=>x.status==='cloud_submit_failed').length,results:out,next:'請回 Mac Host Cloud Sync Lab 執行 Host pull/import，然後到 Admin 載入 Mac Pending。'});
+    log('cloudSyncResult',{ok:true,total:out.length,cloud_submitted:out.filter(x=>x.status==='cloud_submitted'||x.status==='cloud_duplicate').length,failed:out.filter(x=>x.status==='cloud_submit_failed').length,results:out,next:'已送出到 Cloudflare，等待 Mac Admin 拉取審核。'});
     await renderLocal();
   }catch(e){log('cloudSyncResult',{ok:false,error:e.message})}
 }
@@ -470,6 +486,7 @@ async function cloudSaveSettings(){
   const cfg=cloudCfgFromInputs();
   if(!cfg.worker_url||!cfg.device_id) {log('cloudSyncResult',{ok:false,error:'請至少輸入 Worker URL 與 Device ID'}); return;}
   setCloudCfg(cfg);
+  updateCloudConfigStatus();
   log('cloudSyncResult',{ok:true,message:'已儲存於此瀏覽器 localStorage。Device Secret 不會上傳 GitHub；請勿共用此裝置。',worker_url:cfg.worker_url,device_id:cfg.device_id,device_secret:cfg.device_secret?'[REDACTED]':'[EMPTY]'});
 }
 
@@ -636,7 +653,7 @@ async function boot(){await openDB(); const device=await ensureDeviceId(); $('ho
 Device ID: ${device}
 IndexedDB: ${DB_NAME}
 analysis_date 採 Asia/Taipei YYYY-MM-DD。
-r16：解析通過 audit 後自動送 pending；用戶端完整報告會先依 Mac DB 清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告；用戶端超前於 DB 的內容只會是 pending 中報告。`; $('btnGenerate').onclick=generate; $('btnCopyOpenChatGPTApp').onclick=copyAndOpenChatGPTApp; $('btnCopyOpenChatGPTWeb').onclick=copyAndOpenChatGPTWeb; $('btnPasteResponse').onclick=pasteClipboardToResponse; $('btnPasteParse').onclick=pasteAndParse; $('btnParseSave').onclick=parseSave; $('btnHealth').onclick=health; $('btnPullStatus').onclick=async()=>{await pullStatusAndCleanup(); await loadClientReports(false);}; $('btnCleanupLocal').onclick=async()=>{await cleanupLocalAgainstMacDB(false); await loadClientReports(false);}; if($('btnCloudSave')) $('btnCloudSave').onclick=cloudSaveSettings; if($('btnCloudWorkerHealth')) $('btnCloudWorkerHealth').onclick=cloudWorkerHealth; if($('btnCloudSubmitAll')) $('btnCloudSubmitAll').onclick=cloudSubmitAll; loadCloudCfgToInputs(); $('btnRefreshLocal').onclick=async()=>{await renderLocal(); await loadClientReports(false);}; if($('btnLoadClientReports')) $('btnLoadClientReports').onclick=()=>loadClientReports(true); $('searchBox').oninput=renderLocal; $('btnExportLocal').onclick=exportLocal; $('btnImportLocal').onclick=importLocal; setupCollapsibles(); renderLocal(); loadClientReports(false)}
+r16：解析通過 audit 後自動送 pending；用戶端完整報告會先依 Mac DB 清理，已 commit 的 local copy 會刪除，只保留 Mac DB 正式報告；用戶端超前於 DB 的內容只會是 pending 中報告。`; $('btnGenerate').onclick=generate; if($('analysisModel')) $('analysisModel').onchange=async()=>{if($('promptBox').value.trim()) await generate();}; if($('btnCopyPrompt')) $('btnCopyPrompt').onclick=copyPrompt; $('btnCopyOpenChatGPTWeb').onclick=copyAndOpenChatGPTWeb; if($('btnCopyOpenGemini')) $('btnCopyOpenGemini').onclick=copyAndOpenGemini; $('btnPasteParse').onclick=pasteAndParse; $('btnParseSave').onclick=parseSave; $('btnHealth').onclick=health; $('btnPullStatus').onclick=async()=>{await pullStatusAndCleanup(); await loadClientReports(false);}; $('btnCleanupLocal').onclick=async()=>{await cleanupLocalAgainstMacDB(false); await loadClientReports(false);}; if($('btnCloudSave')) $('btnCloudSave').onclick=cloudSaveSettings; if($('btnCloudClear')) $('btnCloudClear').onclick=cloudClearSettings; if($('btnCloudWorkerHealth')) $('btnCloudWorkerHealth').onclick=cloudWorkerHealth; if($('btnCloudSubmitAll')) $('btnCloudSubmitAll').onclick=cloudSubmitAll; loadCloudCfgToInputs(); updateCloudConfigStatus(); $('btnRefreshLocal').onclick=async()=>{await renderLocal(); await loadClientReports(false);}; if($('btnLoadClientReports')) $('btnLoadClientReports').onclick=()=>loadClientReports(true); $('searchBox').oninput=renderLocal; $('btnExportLocal').onclick=exportLocal; $('btnImportLocal').onclick=importLocal; setupCollapsibles(); renderLocal(); loadClientReports(false)}
 boot().catch(e=>alert(e.message));
 
-// r18-r7 marker: github_cloudflare_direct_submit
+// r18-r8 marker: pilot_admin_workflow_prompt_gemini_ux

@@ -22,6 +22,7 @@
       <input id="adminToken" type="password" placeholder="貼上 token">
       <div class="row">
         <button id="btnAdminHealth">驗證 Token / 測試連線</button>
+        <button id="btnCloudPullRefresh">從 Cloudflare 拉取 Pending 並刷新</button>
         <button id="btnLoadPending">載入 Mac Pending</button>
       </div>
       <span id="adminNetBadge" class="badge warn">尚未連線</span>
@@ -30,7 +31,7 @@
 
     <section class="card">
       <h2>2. Pending Queue 審核</h2>
-      <p class="small">V0.2-alpha-r16 預設禁止 direct commit；必須先 Approve，再 Commit。pending_submitted 會顯示 Approve / Reject，approved 才會顯示 Commit。</p>
+      <p class="small">R18-r8：日常流程可在 Admin 一頁完成。先按「從 Cloudflare 拉取 Pending 並刷新」，人工 Approve / Reject；Commit 成功後會自動回寫 Worker 狀態。若雲端回寫失敗，本機 commit 不回滾，可重試同步。</p>
       <div id="adminList" class="list"></div>
       <pre id="adminResult" class="output"></pre>
     </section>
@@ -62,7 +63,7 @@
 
     <section class="card">
       <h2>4B. Cloud Sync Lab</h2>
-      <p class="small">R18-r5-r2 安全測試入口：使用現有 8765 Host API 驗證主系統健康狀態、Token 與 LAN 使用提示；不啟動第二個 server、不直接讀寫 DB。</p>
+      <p class="small">R18-r8 後 Cloud Sync Lab 主要作為 Cloudflare 設定、診斷與補救入口；日常拉取、審核、commit、狀態回寫優先在 Admin 頁完成。</p>
       <p><a href="cloud_sync_lab.html">開啟 Cloud Sync Lab</a></p>
     </section>
 

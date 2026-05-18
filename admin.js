@@ -1,4 +1,4 @@
-const ADMIN_VERSION='0.2.0-alpha-r18-r3-json-repair-token-expiry';
+const ADMIN_VERSION='0.2.0-alpha-r18-r8-pilot-admin-workflow-prompt-gemini-ux';
 let lastImportedUpdateZip='';
 function $(id){return document.getElementById(id)}
 function log(el,obj){$(el).textContent=typeof obj==='string'?obj:JSON.stringify(obj,null,2)}
@@ -71,20 +71,46 @@ function recordCard(r){
     現價資訊：${esc(parsed.current_price_date ?? r.current_price_date ?? '資料不足')}｜${esc(parsed.current_price ?? r.current_price ?? '資料不足')}<br>
     操作資訊：<b>${actionHint}</b><br>
     Pending ID：<code>${r.pending_id}</code><br>
+    來源：${esc(r.source_mode||'local')}｜Cloud Pending ID：<code>${esc(r.cloud_pending_id||'')}</code><br>
+    Cloud Sync：${esc(r.cloud_sync_status||r.cloud_status||'未同步/待確認')}｜最後同步：${esc(r.last_cloud_sync_at||'')}<br>
     Hash：<code>${String(r.payload_hash||'').slice(0,16)}...</code><br>
     <details><summary>完整 pending JSON</summary><pre>${JSON.stringify(parsed,null,2)}</pre></details>`;
   const row=document.createElement('div'); row.className='row';
   const approve=document.createElement('button'); approve.textContent='Approve'; approve.onclick=()=>adminAction('/api/pending/approve',{pending_id:r.pending_id,review_note:'approved from admin.html'});
   const reject=document.createElement('button'); reject.textContent='Reject'; reject.className='danger'; reject.onclick=()=>{const reason=prompt('Reject reason?','rejected from admin.html'); if(reason) adminAction('/api/pending/reject',{pending_id:r.pending_id,rejected_reason:reason})};
-  const commit=document.createElement('button'); commit.textContent='Commit'; commit.onclick=()=>adminAction('/api/pending/commit',{pending_id:r.pending_id});
+  const commit=document.createElement('button'); commit.textContent='Commit（自動回寫 Worker）'; commit.onclick=()=>adminAction('/api/pending/commit',{pending_id:r.pending_id});
   const commitDisabled=document.createElement('button'); commitDisabled.textContent='Commit（需先 Approve）'; commitDisabled.disabled=true; commitDisabled.className='secondary';
   if(status==='pending_submitted'){row.append(approve,reject,commitDisabled)}
   else if(status==='approved'){row.append(commit,reject)}
   else {const span=document.createElement('span'); span.className='small'; span.textContent=actionHint; row.append(span)}
   div.appendChild(row); return div;
 }
-async function loadPending(){try{const resp=await api('/api/pending/list'); const list=$('adminList'); list.innerHTML=''; const records=resp.records||[]; if(!records.length){list.innerHTML='<div class="record small">Mac SQLite pending_queue 目前是 0。若 iPhone 仍顯示 pending_local/sync_error，請回前台確認 Mac Host URL；r16 解析通過 audit 後會自動送 pending，不需要人工送出。</div>';} else {records.forEach(r=>list.appendChild(recordCard(r)));} log('adminResult',{ok:true,count:records.length, records})}catch(e){log('adminResult',{ok:false,error:e.message})}}
-async function adminAction(path, body){try{const resp=await api(path,'POST',body); log('adminResult',resp); await loadPending(); await loadReports(false)}catch(e){log('adminResult',{ok:false,error:e.message})}}
+async function loadPending(){try{const resp=await api('/api/pending/list'); const list=$('adminList'); list.innerHTML=''; const records=resp.records||[]; if(!records.length){list.innerHTML='<div class="record small">Mac SQLite pending_queue 目前是 0。若朋友/iPhone 已 cloud_submitted，請先按「從 Cloudflare 拉取 Pending 並刷新」。</div>';} else {records.forEach(r=>list.appendChild(recordCard(r)));} log('adminResult',{ok:true,count:records.length, records})}catch(e){log('adminResult',{ok:false,error:e.message})}}
+async function adminAction(path, body){
+  try{
+    const resp=await api(path,'POST',body);
+    let cloud_sync=null;
+    if(path==='/api/pending/commit' && body && body.pending_id){
+      try{
+        cloud_sync=await api('/api/cloudflare/status/sync_one','POST',{pending_id:body.pending_id});
+      }catch(e){
+        cloud_sync={ok:false,error:e.message,cloud_sync_failed:true,note:'本機 commit 已完成；雲端狀態回寫失敗，可稍後重試。'};
+      }
+    }
+    log('adminResult',cloud_sync?{ok:resp.ok!==false,local_action:resp,cloud_sync}:resp);
+    await loadPending(); await loadReports(false)
+  }catch(e){log('adminResult',{ok:false,error:e.message})}
+}
+async function cloudPullRefresh(){
+  try{
+    const pull=await api('/api/cloudflare/host/pull_import','POST',{});
+    await loadPending();
+    log('adminResult',{ok:true,cloud_pull_import:pull,next:'已從 Cloudflare 拉取並刷新 Mac Pending。請審核後 Approve / Commit。'});
+  }catch(e){
+    log('adminResult',{ok:false,error:e.message,hint:'請確認 Cloud Sync Lab 已儲存 Worker URL / Host ID / Host Secret，且 Worker Health 正常。'});
+  }
+}
+
 function reportCard(r){
   const div=document.createElement('div'); div.className='record';
   div.innerHTML=`<b>${r.stock_id}</b> ${r.stock_name||''}｜${r.analysis_date||''}<br>
@@ -168,7 +194,7 @@ function setupCollapsibles(){document.querySelectorAll('.card > h2').forEach(h=>
 window.addEventListener('DOMContentLoaded',()=>{
   setupCollapsibles();
   loadSettings();
-  $('btnAdminHealth').onclick=health; $('btnLoadPending').onclick=loadPending;
+  $('btnAdminHealth').onclick=health; if($('btnCloudPullRefresh')) $('btnCloudPullRefresh').onclick=cloudPullRefresh; $('btnLoadPending').onclick=loadPending;
   $('btnLoadReports').onclick=()=>loadReports(true);
   $('btnUpdateInfo').onclick=updateInfo; $('btnImportUpdateZip').onclick=importUpdateZip; $('btnApplyUpdateZip').onclick=applyUpdateZip; $('btnDryRunInstallUpdateZip').onclick=dryRunInstallUpdateZip; $('btnInstallUpdateZip').onclick=installUpdateZip; $('btnRollbackLatest').onclick=rollbackLatestBackup;
   $('btnDiagnostics').onclick=diagnostics; $('btnExportDiagnostics').onclick=exportDiagnostics;
